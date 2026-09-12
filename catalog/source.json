@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "provider": "huggingface",
+  "repository": "rhasspy/piper-voices",
+  "requested_revision": "main",
+  "observed_revision": "1162a9173d0ce503555aed757976b7a9912eae4c",
+  "upstream_catalog_path": "voices.json",
+  "artifact_roles": ["model_card", "model", "config"],
+  "notes": "Run scripts/refresh_catalog.py to materialize catalog/voices.json from all upstream voices."
+}

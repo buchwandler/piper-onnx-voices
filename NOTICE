@@ -1,0 +1,7 @@
+piper-onnx-voices-mvp
+
+This repository-authored code is MIT licensed. Piper voice model weights,
+configuration files, MODEL_CARD text, datasets, names, and other upstream
+artifacts are not relicensed by this project. The catalog points at
+rhasspy/piper-voices and preserves each voice's MODEL_CARD as a required
+artifact so consumers can review the voice-specific license and attribution.

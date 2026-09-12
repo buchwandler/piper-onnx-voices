@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "piper-onnx-voices-catalog"
+version = "0.1.0"
+description = "Small catalog/downloader for rhasspy/piper-voices"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "piper-onnx-voices-mvp contributors"}]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+piper-voices = "piper_voice_catalog.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["piper_voice_catalog*"]

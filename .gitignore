@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+downloads/
+.dist/
+context_piper_onnx_voices*.*

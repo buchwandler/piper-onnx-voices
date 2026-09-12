@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/piper-onnx-voices/schemas/voice-catalog.schema.json",
+  "title": "Piper voice catalog",
+  "type": "object",
+  "required": ["schema", "kind", "source", "voices"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": 1},
+    "kind": {"const": "piper-voice-catalog"},
+    "source": {
+      "type": "object",
+      "required": ["provider", "repository", "requested_revision", "revision", "catalog_url"],
+      "additionalProperties": false,
+      "properties": {
+        "provider": {"const": "huggingface"},
+        "repository": {"type": "string", "minLength": 1},
+        "requested_revision": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1},
+        "catalog_url": {"type": "string", "pattern": "^https://"}
+      }
+    },
+    "voices": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"$ref": "#/$defs/voice"}
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "required": ["role", "path", "filename", "url", "size", "md5"],
+      "additionalProperties": false,
+      "properties": {
+        "role": {"enum": ["model_card", "model", "config"]},
+        "path": {"type": "string", "minLength": 1},
+        "filename": {"type": "string", "minLength": 1},
+        "url": {"type": "string", "pattern": "^https://"},
+        "size": {"type": "integer", "minimum": 1},
+        "md5": {"type": "string", "pattern": "^[0-9a-f]{32}$"}
+      }
+    },
+    "voice": {
+      "type": "object",
+      "required": ["id", "name", "language", "quality", "num_speakers", "speaker_id_map", "aliases", "artifacts"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "language": {"type": "object"},
+        "quality": {"type": "string", "minLength": 1},
+        "num_speakers": {"type": "integer", "minimum": 1},
+        "speaker_id_map": {"type": "object"},
+        "aliases": {"type": "array", "items": {"type": "string"}},
+        "artifacts": {
+          "type": "object",
+          "required": ["model_card", "model", "config"],
+          "additionalProperties": false,
+          "properties": {
+            "model_card": {"$ref": "#/$defs/artifact"},
+            "model": {"$ref": "#/$defs/artifact"},
+            "config": {"$ref": "#/$defs/artifact"}
+          }
+        }
+      }
+    }
+  }
+}
