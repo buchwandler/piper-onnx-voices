@@ -14,8 +14,12 @@ CATALOG = ROOT / "catalog" / "voices.json"
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Refresh the catalog and serve the MVP browser UI")
-    parser.add_argument("--offline", action="store_true", help="Use existing catalog/voices.json")
+    parser = argparse.ArgumentParser(
+        description="Refresh the catalog and serve the MVP browser UI"
+    )
+    parser.add_argument(
+        "--offline", action="store_true", help="Use existing catalog/voices.json"
+    )
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
     if args.offline:
@@ -28,7 +32,9 @@ def main() -> int:
         )
     print(f"Catalog contains {len(catalog['voices'])} voices")
     print(f"Open http://127.0.0.1:{args.port}/web/")
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(ROOT))
+    handler = functools.partial(
+        http.server.SimpleHTTPRequestHandler, directory=str(ROOT)
+    )
     with http.server.ThreadingHTTPServer(("127.0.0.1", args.port), handler) as server:
         server.serve_forever()
     return 0

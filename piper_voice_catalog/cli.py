@@ -37,7 +37,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="piper-voices",
         description="List and download voices from rhasspy/piper-voices",
     )
-    parser.add_argument("--catalog", type=Path, help="Use a materialized catalog/voices.json")
+    parser.add_argument(
+        "--catalog", type=Path, help="Use a materialized catalog/voices.json"
+    )
     parser.add_argument("--repository", default=DEFAULT_REPOSITORY)
     parser.add_argument("--revision", default=DEFAULT_REVISION)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -46,7 +48,9 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--output", type=Path, default=Path("catalog/voices.json"))
 
     verify = sub.add_parser("verify", help="Verify a materialized catalog")
-    verify.add_argument("path", type=Path, nargs="?", default=Path("catalog/voices.json"))
+    verify.add_argument(
+        "path", type=Path, nargs="?", default=Path("catalog/voices.json")
+    )
 
     listing = sub.add_parser("list", help="List voices")
     listing.add_argument("--language")
@@ -60,10 +64,14 @@ def build_parser() -> argparse.ArgumentParser:
     urls = sub.add_parser("urls", help="Print the three direct download URLs")
     urls.add_argument("voice")
 
-    download = sub.add_parser("download", help="Download exactly MODEL_CARD + ONNX + JSON")
+    download = sub.add_parser(
+        "download", help="Download exactly MODEL_CARD + ONNX + JSON"
+    )
     download.add_argument("voice")
     download.add_argument("--output", type=Path, default=Path("downloads"))
-    download.add_argument("--flat", action="store_true", help="Write directly into --output")
+    download.add_argument(
+        "--flat", action="store_true", help="Write directly into --output"
+    )
     download.add_argument("--overwrite", action="store_true")
     return parser
 
@@ -73,11 +81,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "refresh":
-            catalog = fetch_and_build_catalog(repository=args.repository, revision=args.revision)
+            catalog = fetch_and_build_catalog(
+                repository=args.repository, revision=args.revision
+            )
             verify_catalog(catalog)
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(
-                json.dumps(catalog, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                json.dumps(catalog, ensure_ascii=False, indent=2, sort_keys=True)
+                + "\n",
                 encoding="utf-8",
             )
             print(

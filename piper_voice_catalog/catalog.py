@@ -120,12 +120,17 @@ def build_catalog(
         _require(isinstance(name, str) and name, f"{voice_id}: invalid name")
         _require(isinstance(quality, str) and quality, f"{voice_id}: invalid quality")
         _require(
-            isinstance(num_speakers, int) and not isinstance(num_speakers, bool) and num_speakers >= 1,
+            isinstance(num_speakers, int)
+            and not isinstance(num_speakers, bool)
+            and num_speakers >= 1,
             f"{voice_id}: invalid num_speakers",
         )
         speaker_id_map = item.get("speaker_id_map") or {}
         aliases = item.get("aliases") or []
-        _require(isinstance(speaker_id_map, dict), f"{voice_id}: speaker_id_map must be an object")
+        _require(
+            isinstance(speaker_id_map, dict),
+            f"{voice_id}: speaker_id_map must be an object",
+        )
         _require(
             isinstance(aliases, list) and all(isinstance(x, str) for x in aliases),
             f"{voice_id}: aliases must be strings",
@@ -199,17 +204,28 @@ def verify_catalog(catalog: dict[str, Any]) -> None:
     for voice_id, voice in voices.items():
         _require(voice.get("id") == voice_id, f"{voice_id}: mismatched id")
         artifacts = voice.get("artifacts")
-        _require(isinstance(artifacts, dict), f"{voice_id}: artifacts must be an object")
+        _require(
+            isinstance(artifacts, dict), f"{voice_id}: artifacts must be an object"
+        )
         _require(
             set(artifacts) == {"model_card", "model", "config"},
             f"{voice_id}: voice must expose exactly model_card/model/config",
         )
         for role, artifact in artifacts.items():
             _require(artifact.get("role") == role, f"{voice_id}: wrong role for {role}")
-            _require(isinstance(artifact.get("size"), int) and artifact["size"] > 0, f"{voice_id}/{role}: invalid size")
-            _require(re.fullmatch(r"[0-9a-f]{32}", artifact.get("md5", "")) is not None, f"{voice_id}/{role}: invalid md5")
+            _require(
+                isinstance(artifact.get("size"), int) and artifact["size"] > 0,
+                f"{voice_id}/{role}: invalid size",
+            )
+            _require(
+                re.fullmatch(r"[0-9a-f]{32}", artifact.get("md5", "")) is not None,
+                f"{voice_id}/{role}: invalid md5",
+            )
             url = artifact.get("url")
-            _require(isinstance(url, str) and url.startswith("https://"), f"{voice_id}/{role}: invalid URL")
+            _require(
+                isinstance(url, str) and url.startswith("https://"),
+                f"{voice_id}/{role}: invalid URL",
+            )
             _require(url not in seen_urls, f"Duplicate artifact URL: {url}")
             seen_urls.add(url)
 
@@ -219,7 +235,9 @@ def get_voice(catalog: dict[str, Any], voice_id_or_alias: str) -> dict[str, Any]
     if voice_id_or_alias in voices:
         return voices[voice_id_or_alias]
     matches = [
-        voice for voice in voices.values() if voice_id_or_alias in voice.get("aliases", [])
+        voice
+        for voice in voices.values()
+        if voice_id_or_alias in voice.get("aliases", [])
     ]
     if len(matches) == 1:
         return matches[0]
@@ -242,5 +260,9 @@ def list_voices(
         ]
     if quality:
         wanted_quality = quality.casefold()
-        values = [voice for voice in values if voice.get("quality", "").casefold() == wanted_quality]
+        values = [
+            voice
+            for voice in values
+            if voice.get("quality", "").casefold() == wanted_quality
+        ]
     return sorted(values, key=lambda voice: voice["id"])

@@ -26,14 +26,19 @@ def _md5(path: Path) -> str:
 
 def _download_artifact(artifact: dict[str, Any], destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    request = urllib.request.Request(artifact["url"], headers={"User-Agent": USER_AGENT})
+    request = urllib.request.Request(
+        artifact["url"], headers={"User-Agent": USER_AGENT}
+    )
     fd, temporary_name = tempfile.mkstemp(
         prefix=f".{destination.name}.", suffix=".part", dir=destination.parent
     )
     os.close(fd)
     temporary = Path(temporary_name)
     try:
-        with urllib.request.urlopen(request, timeout=180) as response, temporary.open("wb") as output:
+        with (
+            urllib.request.urlopen(request, timeout=180) as response,
+            temporary.open("wb") as output,
+        ):
             while chunk := response.read(1024 * 1024):
                 output.write(chunk)
         if temporary.stat().st_size != artifact["size"]:
@@ -66,7 +71,10 @@ def download_voice(
         artifact = voice["artifacts"][role]
         destination = target / artifact["filename"]
         if destination.exists() and not overwrite:
-            if destination.stat().st_size == artifact["size"] and _md5(destination) == artifact["md5"]:
+            if (
+                destination.stat().st_size == artifact["size"]
+                and _md5(destination) == artifact["md5"]
+            ):
                 downloaded.append(destination)
                 continue
             raise DownloadError(

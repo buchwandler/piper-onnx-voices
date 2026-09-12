@@ -5,7 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from piper_voice_catalog.catalog import CatalogError, build_catalog, get_voice, list_voices, verify_catalog
+from piper_voice_catalog.catalog import (
+    CatalogError,
+    build_catalog,
+    get_voice,
+    list_voices,
+    verify_catalog,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "upstream_voices.json"
 
@@ -24,7 +30,9 @@ def test_build_catalog_exposes_exact_three_artifacts_and_pinned_urls() -> None:
     voice = catalog["voices"]["et_EE-news-medium"]
     assert list(voice["artifacts"]) == ["model_card", "model", "config"]
     assert voice["artifacts"]["model"]["url"].endswith(
-        "/resolve/" + "a" * 40 + "/et/et_EE/news/medium/et_EE-news-medium.onnx?download=true"
+        "/resolve/"
+        + "a" * 40
+        + "/et/et_EE/news/medium/et_EE-news-medium.onnx?download=true"
     )
     assert voice["artifacts"]["model_card"]["filename"] == "MODEL_CARD"
 
@@ -32,7 +40,9 @@ def test_build_catalog_exposes_exact_three_artifacts_and_pinned_urls() -> None:
 def test_alias_and_filters() -> None:
     catalog = build_catalog(upstream())
     assert get_voice(catalog, "es-sharvard-medium")["id"] == "es_ES-sharvard-medium"
-    assert [v["id"] for v in list_voices(catalog, language="et")] == ["et_EE-news-medium"]
+    assert [v["id"] for v in list_voices(catalog, language="et")] == [
+        "et_EE-news-medium"
+    ]
     assert len(list_voices(catalog, quality="medium")) == 2
 
 

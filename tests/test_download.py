@@ -10,6 +10,7 @@ from piper_voice_catalog.download import download_voice
 class Response(io.BytesIO):
     def __enter__(self):
         return self
+
     def __exit__(self, *args):
         self.close()
 
@@ -45,4 +46,8 @@ def test_download_voice_writes_exact_three_files(monkeypatch, tmp_path: Path) ->
     }
     paths = download_voice(voice, tmp_path)
     assert {p.name for p in paths} == {"MODEL_CARD", "v.onnx", "v.onnx.json"}
-    assert {p.name for p in tmp_path.iterdir()} == {"MODEL_CARD", "v.onnx", "v.onnx.json"}
+    assert {p.name for p in tmp_path.iterdir()} == {
+        "MODEL_CARD",
+        "v.onnx",
+        "v.onnx.json",
+    }
