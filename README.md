@@ -1,159 +1,110 @@
-# piper-onnx-voices-mvp
+# piper-onnx-voices
 
-A small Piper counterpart to a model registry such as `kokoro-onnx-models`.
-It does **not** mirror the roughly 12 GB `rhasspy/piper-voices` repository.
-Instead, it treats upstream `voices.json` as discovery metadata, normalizes every
-voice into one catalog record, and lets a consumer download exactly the three
-files needed for a selected Piper voice:
+A small, dependency-free catalog and downloader for the runtime-ready voices in
+[`rhasspy/piper-voices`](https://huggingface.co/rhasspy/piper-voices). The project
+tracks metadata and download URLs. It does not mirror the upstream voice files.
 
-1. `MODEL_CARD` — license / attribution information;
-2. `<voice>.onnx` — the Piper ONNX model;
-3. `<voice>.onnx.json` — the matching Piper config.
+Each selected voice exposes exactly three required artifacts:
 
-The upstream Piper documentation also describes the ONNX + JSON pair as the two
-runtime files and calls out `MODEL_CARD` for voice-specific licensing. This MVP
-therefore makes the model card a required third artifact rather than optional
-metadata.
-
-## Why this shape
-
-`rhasspy/piper-voices` already publishes a machine-readable `voices.json` with
-language, quality, speaker metadata, aliases, paths, byte sizes, and MD5 digests.
-Re-scraping the repository tree would duplicate that logic. The refresh step
-uses the upstream file, requires exactly one `MODEL_CARD`, one `.onnx`, and one
-`.onnx.json` per voice, and generates a smaller client contract with explicit
-artifact roles and direct download URLs.
-
-When Hugging Face redirects `main` to a cache URL containing a 40-character
-commit SHA, the generated catalog pins all artifact URLs to that exact SHA. This
-makes a committed `catalog/voices.json` reproducible while still allowing a
-future refresh from `main`.
+1. `MODEL_CARD`, for license and attribution information.
+2. The Piper `.onnx` model.
+3. The matching `.onnx.json` configuration.
 
 ## Quick start
-
-No third-party runtime dependencies are required.
 
 ```bash
 python -m pip install -e .
 
-# Live list: fetches all voices from upstream main.
+# Live catalog from upstream main.
 piper-voices list
-
-# Filter by language family/locale and quality.
 piper-voices list --language et --quality medium
-
-# Inspect the three URLs for one voice.
 piper-voices show et_EE-news-medium
 piper-voices urls et_EE-news-medium
-
-# Download exactly the three files into downloads/et_EE-news-medium/.
 piper-voices download et_EE-news-medium
 ```
 
-The downloaded directory is intentionally simple:
+The downloader verifies upstream byte size and MD5 metadata before atomically
+installing each file. MD5 is retained because it is supplied by upstream and is
+useful for corruption detection. It is not presented as a modern
+cryptographic supply-chain identity.
 
-```text
-downloads/et_EE-news-medium/
-├── MODEL_CARD
-├── et_EE-news-medium.onnx
-└── et_EE-news-medium.onnx.json
-```
+## Materialized catalog and offline use
 
-Downloads are written atomically and verified against the upstream byte size and
-MD5 before the final filename is installed.
-
-## Materialize a catalog for your Piper application
-
-For an application, CI build, mobile bundle, or API server, commit a normalized
-snapshot instead of contacting Hugging Face just to list voices:
+The repository contains the canonical generated snapshot in
+`catalog/voices.json` and matching provenance in `catalog/source.json`.
+Generation resolves the requested upstream revision to an exact 40-character
+commit SHA before fetching `voices.json`. Every generated artifact URL uses that
+same SHA, so a committed snapshot does not change when upstream `main` moves.
 
 ```bash
 python scripts/refresh_catalog.py
 python scripts/verify_catalog.py
+
+# Use the snapshot without contacting Hugging Face.
+piper-voices --catalog catalog/voices.json list
+piper-voices --catalog catalog/voices.json download et_EE-news-medium
 ```
 
-This writes `catalog/voices.json`. Your app can then read `voices` and let the
-user select by `id`, language, quality, or alias. Each record contains:
+The Python wheel is intentionally network-first. It does not bundle the
+repository catalog or schema as package data. Applications that need offline
+behavior should copy or vendor the committed snapshot and pass `--catalog`.
+The JSON Schema for independent consumers is
+`schemas/voice-catalog.schema.json`.
 
-```json
-{
-  "id": "et_EE-news-medium",
-  "name": "news",
-  "language": {"code": "et_EE", "family": "et"},
-  "quality": "medium",
-  "num_speakers": 1,
-  "speaker_id_map": {},
-  "aliases": [],
-  "artifacts": {
-    "model_card": {"filename": "MODEL_CARD", "url": "...", "size": 449, "md5": "..."},
-    "model": {"filename": "et_EE-news-medium.onnx", "url": "...", "size": 76800000, "md5": "..."},
-    "config": {"filename": "et_EE-news-medium.onnx.json", "url": "...", "size": 5000, "md5": "..."}
-  }
-}
+## Browser selector
+
+A small no-framework selector is available at `web/index.html`:
+
+```bash
+python scripts/serve_catalog.py --offline
+# Open http://127.0.0.1:8000/web/
 ```
 
-The numbers above are illustrative; the generated catalog always preserves the
-actual upstream metadata.
+Without `--offline`, the server refreshes the committed catalog before serving
+it. The page loads the materialized catalog and displays the three pinned
+artifact links. If the page is served without a local snapshot, it has a live
+upstream fallback for development only.
 
-A daily GitHub Actions workflow is included. It refreshes `catalog/voices.json`,
-verifies the contract, and commits only when upstream changed.
+## Catalog contract
 
-## Minimal Python integration
+The verifier enforces:
+
+- exact source provider, repository, requested revision, commit SHA, URL, digest,
+  and voice count;
+- complete language, quality, speaker, and alias metadata;
+- one `MODEL_CARD`, one `.onnx`, and one `.onnx.json` per voice;
+- safe relative paths and local filenames with no traversal or absolute paths;
+- role, extension, filename, path, URL, size, and MD5 consistency;
+- globally unambiguous aliases and unique artifact URLs.
+
+Refresh output is deterministic UTF-8 JSON with sorted keys, stable indentation,
+and one terminal newline. GitHub Actions verifies the committed snapshot on
+pushes and pull requests. Scheduled refreshes rebase, regenerate, verify, and
+push only validated metadata.
+
+## Python integration
 
 ```python
 from pathlib import Path
 
-from piper_voice_catalog import fetch_and_build_catalog, get_voice, download_voice
+from piper_voice_catalog import download_voice, get_voice, load_catalog
 
-catalog = fetch_and_build_catalog()
+catalog = load_catalog(Path("catalog/voices.json"))
 voice = get_voice(catalog, "et_EE-news-medium")
 download_voice(voice, Path("voices") / voice["id"])
 ```
 
-If your application ships a materialized snapshot:
+## Naming and licensing
 
-```python
-from pathlib import Path
-from piper_voice_catalog import load_catalog, get_voice
+The public names are:
 
-catalog = load_catalog(Path("catalog/voices.json"))
-voice = get_voice(catalog, selected_voice_id)
-```
+- repository: `piper-onnx-voices`;
+- Python distribution: `piper-onnx-voices`;
+- import package: `piper_voice_catalog`;
+- CLI: `piper-voices`.
 
-## Browser MVP
-
-The repo also includes a tiny no-framework selector. The recommended path is:
-
-```bash
-python scripts/serve_catalog.py
-```
-
-That refreshes `catalog/voices.json`, starts a local server, and prints the URL.
-The page filters all voices and exposes three download links for the selected
-voice. `--offline` serves an existing catalog without refreshing.
-
-## Multi-speaker voices
-
-Some Piper models contain multiple speakers. The catalog keeps `num_speakers`
-and `speaker_id_map` from upstream. Selecting a model still downloads the same
-three files; your Piper runtime chooses a speaker ID at synthesis time.
-
-## Catalog contract
-
-`scripts/verify_catalog.py` enforces these MVP invariants:
-
-- every voice exposes exactly `model_card`, `model`, and `config`;
-- each artifact has a positive size and 32-character MD5;
-- artifact URLs use HTTPS;
-- aliases remain resolvable;
-- a committed refreshed catalog uses the revision resolved during refresh.
-
-The JSON Schema is in `schemas/voice-catalog.schema.json` for consumers that want
-independent validation.
-
-## Licensing
-
-The code in this MVP is MIT licensed. The voice artifacts are not relicensed.
-Always retain and surface the selected voice's `MODEL_CARD`; individual voice
-models and datasets may have terms or attribution requirements beyond the code
-in this repository.
+The MIT license applies to repository-authored code and documentation. Voice
+models, configuration files, datasets, names, `MODEL_CARD` content, and other
+upstream artifacts remain subject to their upstream terms and are not relicensed
+by this project. `MODEL_CARD` is mandatory for every catalog voice so consumers
+can review those terms and attribution requirements.

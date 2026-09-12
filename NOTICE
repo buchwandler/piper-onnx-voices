@@ -1,4 +1,4 @@
-piper-onnx-voices-mvp
+piper-onnx-voices
 
 This repository-authored code is MIT licensed. Piper voice model weights,
 configuration files, MODEL_CARD text, datasets, names, and other upstream

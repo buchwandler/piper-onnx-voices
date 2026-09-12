@@ -3,13 +3,13 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "piper-onnx-voices-catalog"
+name = "piper-onnx-voices"
 version = "0.1.0"
-description = "Small catalog/downloader for rhasspy/piper-voices"
+description = "Catalog and downloader for rhasspy/piper-voices"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
-authors = [{name = "piper-onnx-voices-mvp contributors"}]
+authors = [{name = "piper-onnx-voices contributors"}]
 dependencies = []
 
 [project.optional-dependencies]

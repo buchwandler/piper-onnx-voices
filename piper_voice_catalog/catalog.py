@@ -1,9 +1,11 @@
-"""Fetch and normalize the upstream Piper voice inventory."""
+"""Fetch, normalize, and validate the upstream Piper voice inventory."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -11,8 +13,11 @@ from typing import Any
 
 DEFAULT_REPOSITORY = "rhasspy/piper-voices"
 DEFAULT_REVISION = "main"
-USER_AGENT = "piper-onnx-voices-catalog/0.1"
-_SHA_FROM_RESOLVE_RE = re.compile(r"/([0-9a-f]{40})/voices\.json(?:[?]|$)")
+USER_AGENT = "piper-onnx-voices-catalog/0.2"
+_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+_DIGEST_RE = re.compile(r"^[0-9a-f]{32}$")
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_SAFE_NAME_RE = re.compile(r"^[^\W_][\w.-]*$", re.UNICODE)
 
 
 class CatalogError(ValueError):
@@ -24,6 +29,20 @@ def _require(condition: bool, message: str) -> None:
         raise CatalogError(message)
 
 
+def _safe_name(value: Any, label: str) -> None:
+    _require(isinstance(value, str) and value, f"{label}: must be a non-empty string")
+    _require("/" not in value and "\\" not in value, f"{label}: path separators are forbidden")
+    _require(value not in {".", ".."}, f"{label}: dot segments are forbidden")
+    _require(not Path(value).is_absolute(), f"{label}: absolute paths are forbidden")
+    _require(_SAFE_NAME_RE.fullmatch(value) is not None, f"{label}: unsafe name")
+
+
+def _canonical_json(data: Any) -> bytes:
+    return (json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode(
+        "utf-8"
+    )
+
+
 def huggingface_resolve_url(repository: str, revision: str, path: str) -> str:
     repo = "/".join(urllib.parse.quote(part, safe="") for part in repository.split("/"))
     rev = urllib.parse.quote(revision, safe="")
@@ -31,27 +50,54 @@ def huggingface_resolve_url(repository: str, revision: str, path: str) -> str:
     return f"https://huggingface.co/{repo}/resolve/{rev}/{asset}?download=true"
 
 
-def fetch_upstream_catalog(
-    *, repository: str = DEFAULT_REPOSITORY, revision: str = DEFAULT_REVISION
-) -> tuple[dict[str, Any], str, str]:
-    """Return upstream voices.json, resolved revision, and source URL.
+def huggingface_api_url(repository: str, revision: str) -> str:
+    repo = "/".join(urllib.parse.quote(part, safe="") for part in repository.split("/"))
+    rev = urllib.parse.quote(revision, safe="")
+    return f"https://huggingface.co/api/models/{repo}/revision/{rev}"
 
-    Hugging Face redirects resolve URLs through a cache URL containing the exact
-    commit SHA. When available, that SHA is used for all generated artifact URLs.
-    """
 
-    url = huggingface_resolve_url(repository, revision, "voices.json")
+def _read_url(url: str) -> bytes:
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=60) as response:
-        payload = response.read()
-        final_url = response.geturl()
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return response.read()
+    except (OSError, urllib.error.URLError) as exc:
+        raise CatalogError(f"Unable to fetch {url}") from exc
+
+
+def resolve_revision(repository: str, revision: str = DEFAULT_REVISION) -> str:
+    """Resolve a Hub branch or tag to an exact lowercase commit SHA."""
+    payload = _read_url(huggingface_api_url(repository, revision))
+    try:
+        data = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise CatalogError("Hugging Face repository metadata is not valid UTF-8 JSON") from exc
+    resolved = data.get("sha") if isinstance(data, dict) else None
+    _require(isinstance(resolved, str) and _SHA_RE.fullmatch(resolved.lower()) is not None, "Unable to resolve an exact 40-character commit SHA")
+    return resolved.lower()
+
+
+def _fetch_upstream_catalog_metadata(
+    *, repository: str = DEFAULT_REPOSITORY, revision: str = DEFAULT_REVISION
+) -> tuple[dict[str, Any], str, str, str]:
+    resolved_revision = resolve_revision(repository, revision)
+    url = huggingface_resolve_url(repository, resolved_revision, "voices.json")
+    payload = _read_url(url)
     try:
         data = json.loads(payload.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise CatalogError("Upstream voices.json is not valid UTF-8 JSON") from exc
     _require(isinstance(data, dict) and bool(data), "Upstream voices.json is empty")
-    match = _SHA_FROM_RESOLVE_RE.search(final_url)
-    resolved_revision = match.group(1) if match else revision
+    return data, resolved_revision, url, hashlib.sha256(payload).hexdigest()
+
+
+def fetch_upstream_catalog(
+    *, repository: str = DEFAULT_REPOSITORY, revision: str = DEFAULT_REVISION
+) -> tuple[dict[str, Any], str, str]:
+    """Return upstream voices.json, resolved revision, and source URL."""
+    data, resolved_revision, url, _ = _fetch_upstream_catalog_metadata(
+        repository=repository, revision=revision
+    )
     return data, resolved_revision, url
 
 
@@ -77,9 +123,9 @@ def _artifact(
 ) -> dict[str, Any]:
     size = metadata.get("size_bytes")
     md5 = metadata.get("md5_digest")
-    _require(isinstance(size, int) and size > 0, f"{path}: invalid size_bytes")
+    _require(isinstance(size, int) and not isinstance(size, bool) and size > 0, f"{path}: invalid size_bytes")
     _require(
-        isinstance(md5, str) and re.fullmatch(r"[0-9a-fA-F]{32}", md5) is not None,
+        isinstance(md5, str) and _DIGEST_RE.fullmatch(md5.lower()) is not None,
         f"{path}: invalid md5_digest",
     )
     return {
@@ -99,13 +145,15 @@ def build_catalog(
     requested_revision: str = DEFAULT_REVISION,
     resolved_revision: str | None = None,
     catalog_url: str | None = None,
+    catalog_sha256: str | None = None,
 ) -> dict[str, Any]:
-    """Normalize all entries from upstream voices.json into the MVP contract."""
-
+    """Normalize all entries from upstream voices.json into the catalog contract."""
     _require(isinstance(upstream, dict) and bool(upstream), "Upstream catalog is empty")
-    revision = resolved_revision or requested_revision
+    revision = (resolved_revision or requested_revision).lower()
+    _require(isinstance(revision, str), "Catalog revision must be a string")
     voices: dict[str, Any] = {}
     for voice_id in sorted(upstream):
+        _safe_name(voice_id, "voice id")
         item = upstream[voice_id]
         _require(isinstance(item, dict), f"{voice_id}: entry must be an object")
         _require(item.get("key") == voice_id, f"{voice_id}: key does not match map key")
@@ -120,19 +168,14 @@ def build_catalog(
         _require(isinstance(name, str) and name, f"{voice_id}: invalid name")
         _require(isinstance(quality, str) and quality, f"{voice_id}: invalid quality")
         _require(
-            isinstance(num_speakers, int)
-            and not isinstance(num_speakers, bool)
-            and num_speakers >= 1,
+            isinstance(num_speakers, int) and not isinstance(num_speakers, bool) and num_speakers >= 1,
             f"{voice_id}: invalid num_speakers",
         )
         speaker_id_map = item.get("speaker_id_map") or {}
         aliases = item.get("aliases") or []
+        _require(isinstance(speaker_id_map, dict), f"{voice_id}: speaker_id_map must be an object")
         _require(
-            isinstance(speaker_id_map, dict),
-            f"{voice_id}: speaker_id_map must be an object",
-        )
-        _require(
-            isinstance(aliases, list) and all(isinstance(x, str) for x in aliases),
+            isinstance(aliases, list) and all(isinstance(alias, str) for alias in aliases),
             f"{voice_id}: aliases must be strings",
         )
         voices[voice_id] = {
@@ -162,8 +205,10 @@ def build_catalog(
             "repository": repository,
             "requested_revision": requested_revision,
             "revision": revision,
-            "catalog_url": catalog_url
-            or huggingface_resolve_url(repository, requested_revision, "voices.json"),
+            "catalog_url": catalog_url or huggingface_resolve_url(repository, revision, "voices.json"),
+            "catalog_sha256": catalog_sha256 or hashlib.sha256(_canonical_json(upstream)).hexdigest(),
+            "upstream_catalog_path": "voices.json",
+            "voice_count": len(voices),
         },
         "voices": voices,
     }
@@ -172,7 +217,7 @@ def build_catalog(
 def fetch_and_build_catalog(
     *, repository: str = DEFAULT_REPOSITORY, revision: str = DEFAULT_REVISION
 ) -> dict[str, Any]:
-    upstream, resolved_revision, source_url = fetch_upstream_catalog(
+    upstream, resolved_revision, source_url, catalog_sha256 = _fetch_upstream_catalog_metadata(
         repository=repository, revision=revision
     )
     return build_catalog(
@@ -181,6 +226,7 @@ def fetch_and_build_catalog(
         requested_revision=revision,
         resolved_revision=resolved_revision,
         catalog_url=source_url,
+        catalog_sha256=catalog_sha256,
     )
 
 
@@ -193,52 +239,115 @@ def load_catalog(path: Path) -> dict[str, Any]:
     return data
 
 
+def _verify_language(voice_id: str, language: Any) -> None:
+    _require(isinstance(language, dict), f"{voice_id}: language must be an object")
+    _require(isinstance(language.get("code"), str) and language["code"], f"{voice_id}: invalid language code")
+    _require(isinstance(language.get("family"), str) and language["family"], f"{voice_id}: invalid language family")
+    for key, value in language.items():
+        _require(isinstance(key, str), f"{voice_id}: language keys must be strings")
+        _require(isinstance(value, str) and value, f"{voice_id}: invalid language field {key}")
+
+
+def _verify_artifact(source: dict[str, Any], voice_id: str, role: str, artifact: Any, seen_urls: set[str]) -> None:
+    _require(isinstance(artifact, dict), f"{voice_id}/{role}: artifact must be an object")
+    _require(set(artifact) == {"role", "path", "filename", "url", "size", "md5"}, f"{voice_id}/{role}: invalid artifact fields")
+    _require(artifact.get("role") == role, f"{voice_id}/{role}: wrong role")
+    path = artifact.get("path")
+    filename = artifact.get("filename")
+    _require(isinstance(path, str) and path, f"{voice_id}/{role}: invalid path")
+    _require("\\" not in path and not path.startswith("/") and all(part not in {"", ".", ".."} for part in path.split("/")), f"{voice_id}/{role}: unsafe path")
+    _safe_name(filename, f"{voice_id}/{role}: filename")
+    _require(filename == Path(path).name, f"{voice_id}/{role}: filename does not match path")
+    if role == "model_card":
+        _require(filename == "MODEL_CARD", f"{voice_id}/{role}: filename must be MODEL_CARD")
+    elif role == "model":
+        _require(filename.endswith(".onnx") and not filename.endswith(".onnx.json"), f"{voice_id}/{role}: invalid model filename")
+    else:
+        _require(filename.endswith(".onnx.json"), f"{voice_id}/{role}: invalid config filename")
+    _require(isinstance(artifact.get("size"), int) and not isinstance(artifact["size"], bool) and artifact["size"] > 0, f"{voice_id}/{role}: invalid size")
+    _require(isinstance(artifact.get("md5"), str) and _DIGEST_RE.fullmatch(artifact["md5"]) is not None, f"{voice_id}/{role}: invalid md5")
+    url = artifact.get("url")
+    expected_url = huggingface_resolve_url(source["repository"], source["revision"], path)
+    _require(isinstance(url, str) and url == expected_url, f"{voice_id}/{role}: URL does not match pinned source path")
+    _require(url not in seen_urls, f"Duplicate artifact URL: {url}")
+    seen_urls.add(url)
+
+
 def verify_catalog(catalog: dict[str, Any]) -> None:
+    _require(isinstance(catalog, dict), "Catalog must be an object")
+    _require(set(catalog) == {"schema", "kind", "source", "voices"}, "Catalog has invalid fields")
     _require(catalog.get("schema") == 1, "Catalog schema must be 1")
     _require(catalog.get("kind") == "piper-voice-catalog", "Unexpected catalog kind")
     source = catalog.get("source")
     _require(isinstance(source, dict), "Catalog source must be an object")
+    _require(
+        set(source)
+        == {
+            "provider",
+            "repository",
+            "requested_revision",
+            "revision",
+            "catalog_url",
+            "catalog_sha256",
+            "upstream_catalog_path",
+            "voice_count",
+        },
+        "Catalog source has invalid fields",
+    )
+    _require(source.get("provider") == "huggingface", "Catalog source provider must be huggingface")
+    repository = source.get("repository")
+    _require(isinstance(repository, str) and re.fullmatch(r"[^/\\ ]+/[^/\\ ]+", repository) is not None, "Invalid source repository")
+    _require(isinstance(source.get("requested_revision"), str) and source["requested_revision"], "Invalid requested revision")
+    _require(isinstance(source.get("revision"), str) and _SHA_RE.fullmatch(source["revision"]) is not None, "Source revision must be a lowercase 40-character SHA")
+    _require(source.get("upstream_catalog_path") == "voices.json", "Invalid upstream catalog path")
+    _require(isinstance(source.get("catalog_sha256"), str) and _SHA256_RE.fullmatch(source["catalog_sha256"]) is not None, "Invalid catalog SHA-256")
+    _require(isinstance(source.get("voice_count"), int) and source["voice_count"] > 0, "Invalid voice count")
+    catalog_url = source.get("catalog_url")
+    _require(catalog_url == huggingface_resolve_url(repository, source["revision"], "voices.json"), "Catalog URL is not pinned to the source revision")
     voices = catalog.get("voices")
     _require(isinstance(voices, dict) and bool(voices), "Catalog has no voices")
+    _require(source["voice_count"] == len(voices), "Catalog source voice count does not match voices")
     seen_urls: set[str] = set()
+    canonical_ids = set(voices)
+    aliases: dict[str, str] = {}
     for voice_id, voice in voices.items():
+        _safe_name(voice_id, "voice id")
+        _require(isinstance(voice, dict), f"{voice_id}: voice must be an object")
+        _require(set(voice) == {"id", "name", "language", "quality", "num_speakers", "speaker_id_map", "aliases", "artifacts"}, f"{voice_id}: invalid voice fields")
         _require(voice.get("id") == voice_id, f"{voice_id}: mismatched id")
+        _require(isinstance(voice.get("name"), str) and voice["name"], f"{voice_id}: invalid name")
+        _verify_language(voice_id, voice.get("language"))
+        _require(isinstance(voice.get("quality"), str) and voice["quality"], f"{voice_id}: invalid quality")
+        num_speakers = voice.get("num_speakers")
+        _require(isinstance(num_speakers, int) and not isinstance(num_speakers, bool) and num_speakers >= 1, f"{voice_id}: invalid num_speakers")
+        speaker_map = voice.get("speaker_id_map")
+        _require(isinstance(speaker_map, dict), f"{voice_id}: speaker_id_map must be an object")
+        speaker_values: set[int] = set()
+        for speaker_name, speaker_id in speaker_map.items():
+            _require(isinstance(speaker_name, str), f"{voice_id}: speaker map keys must be strings")
+            _require(isinstance(speaker_id, int) and not isinstance(speaker_id, bool) and 0 <= speaker_id < num_speakers, f"{voice_id}: invalid speaker id")
+            _require(speaker_id not in speaker_values, f"{voice_id}: duplicate numeric speaker id")
+            speaker_values.add(speaker_id)
+        voice_aliases = voice.get("aliases")
+        _require(isinstance(voice_aliases, list) and all(isinstance(alias, str) for alias in voice_aliases), f"{voice_id}: aliases must be strings")
+        _require(len(voice_aliases) == len(set(voice_aliases)), f"{voice_id}: duplicate aliases")
+        for alias in voice_aliases:
+            _safe_name(alias, f"{voice_id}: alias")
+            if alias in canonical_ids:
+                _require(alias == voice_id, f"{voice_id}: alias collides with canonical id {alias}")
+            previous = aliases.setdefault(alias, voice_id)
+            _require(previous == voice_id, f"Alias is ambiguous: {alias}")
         artifacts = voice.get("artifacts")
-        _require(
-            isinstance(artifacts, dict), f"{voice_id}: artifacts must be an object"
-        )
-        _require(
-            set(artifacts) == {"model_card", "model", "config"},
-            f"{voice_id}: voice must expose exactly model_card/model/config",
-        )
-        for role, artifact in artifacts.items():
-            _require(artifact.get("role") == role, f"{voice_id}: wrong role for {role}")
-            _require(
-                isinstance(artifact.get("size"), int) and artifact["size"] > 0,
-                f"{voice_id}/{role}: invalid size",
-            )
-            _require(
-                re.fullmatch(r"[0-9a-f]{32}", artifact.get("md5", "")) is not None,
-                f"{voice_id}/{role}: invalid md5",
-            )
-            url = artifact.get("url")
-            _require(
-                isinstance(url, str) and url.startswith("https://"),
-                f"{voice_id}/{role}: invalid URL",
-            )
-            _require(url not in seen_urls, f"Duplicate artifact URL: {url}")
-            seen_urls.add(url)
+        _require(isinstance(artifacts, dict) and set(artifacts) == {"model_card", "model", "config"}, f"{voice_id}: voice must expose exactly model_card/model/config")
+        for role in ("model_card", "model", "config"):
+            _verify_artifact(source, voice_id, role, artifacts[role], seen_urls)
 
 
 def get_voice(catalog: dict[str, Any], voice_id_or_alias: str) -> dict[str, Any]:
     voices = catalog["voices"]
     if voice_id_or_alias in voices:
         return voices[voice_id_or_alias]
-    matches = [
-        voice
-        for voice in voices.values()
-        if voice_id_or_alias in voice.get("aliases", [])
-    ]
+    matches = [voice for voice in voices.values() if voice_id_or_alias in voice.get("aliases", [])]
     if len(matches) == 1:
         return matches[0]
     if len(matches) > 1:
@@ -260,9 +369,5 @@ def list_voices(
         ]
     if quality:
         wanted_quality = quality.casefold()
-        values = [
-            voice
-            for voice in values
-            if voice.get("quality", "").casefold() == wanted_quality
-        ]
+        values = [voice for voice in values if voice.get("quality", "").casefold() == wanted_quality]
     return sorted(values, key=lambda voice: voice["id"])

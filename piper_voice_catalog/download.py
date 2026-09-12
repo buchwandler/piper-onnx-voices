@@ -24,11 +24,23 @@ def _md5(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _destination(target: Path, filename: str) -> Path:
+    if not filename or filename in {".", ".."} or "/" in filename or "\\" in filename or Path(filename).is_absolute():
+        raise DownloadError(f"Unsafe artifact filename: {filename!r}")
+    target.mkdir(parents=True, exist_ok=True)
+    root = target.resolve()
+    raw_destination = target / filename
+    if raw_destination.is_symlink():
+        raise DownloadError(f"Existing file is a symlink: {raw_destination}")
+    destination = raw_destination.resolve()
+    if destination.parent != root:
+        raise DownloadError(f"Artifact destination escapes download root: {filename!r}")
+    return destination
+
+
 def _download_artifact(artifact: dict[str, Any], destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    request = urllib.request.Request(
-        artifact["url"], headers={"User-Agent": USER_AGENT}
-    )
+    request = urllib.request.Request(artifact["url"], headers={"User-Agent": USER_AGENT})
     fd, temporary_name = tempfile.mkstemp(
         prefix=f".{destination.name}.", suffix=".part", dir=destination.parent
     )
@@ -64,13 +76,18 @@ def download_voice(
     The destination directory contains exactly the upstream filenames. Existing
     matching files are reused; mismatches fail unless ``overwrite`` is true.
     """
-
     target.mkdir(parents=True, exist_ok=True)
+    destinations = {
+        role: _destination(target, voice["artifacts"][role]["filename"])
+        for role in ("model_card", "model", "config")
+    }
     downloaded: list[Path] = []
     for role in ("model_card", "model", "config"):
         artifact = voice["artifacts"][role]
-        destination = target / artifact["filename"]
+        destination = destinations[role]
         if destination.exists() and not overwrite:
+            if destination.is_symlink():
+                raise DownloadError(f"Existing file is a symlink: {destination}")
             if (
                 destination.stat().st_size == artifact["size"]
                 and _md5(destination) == artifact["md5"]

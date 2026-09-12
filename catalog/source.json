@@ -1,10 +1,11 @@
 {
-  "schema": 1,
+  "catalog_sha256": "5eecddd4c9804c01d8734eb0005de0b4fb3a8166063084717aae88d85cdeea3e",
+  "catalog_url": "https://huggingface.co/rhasspy/piper-voices/resolve/1162a9173d0ce503555aed757976b7a9912eae4c/voices.json?download=true",
   "provider": "huggingface",
   "repository": "rhasspy/piper-voices",
   "requested_revision": "main",
-  "observed_revision": "1162a9173d0ce503555aed757976b7a9912eae4c",
+  "revision": "1162a9173d0ce503555aed757976b7a9912eae4c",
+  "schema": 1,
   "upstream_catalog_path": "voices.json",
-  "artifact_roles": ["model_card", "model", "config"],
-  "notes": "Run scripts/refresh_catalog.py to materialize catalog/voices.json from all upstream voices."
+  "voice_count": 176
 }

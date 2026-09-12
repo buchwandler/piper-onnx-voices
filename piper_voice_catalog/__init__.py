@@ -4,6 +4,7 @@ from .catalog import (
     DEFAULT_REPOSITORY,
     DEFAULT_REVISION,
     CatalogError,
+    resolve_revision,
     build_catalog,
     fetch_and_build_catalog,
     get_voice,
@@ -23,4 +24,5 @@ __all__ = [
     "get_voice",
     "list_voices",
     "load_catalog",
+    "resolve_revision",
 ]

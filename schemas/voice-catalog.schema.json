@@ -8,6 +8,22 @@
   "properties": {
     "schema": { "const": 1 },
     "kind": { "const": "piper-voice-catalog" },
+    "source": { "$ref": "#/$defs/source" },
+    "voices": {
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^(?!\\.{1,2}$)[^/\\\\\\s]+$": { "$ref": "#/$defs/voice" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "safeName": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\.{1,2}$)[^/\\\\\\s]+$"
+    },
     "source": {
       "type": "object",
       "required": [
@@ -15,32 +31,48 @@
         "repository",
         "requested_revision",
         "revision",
-        "catalog_url"
+        "catalog_url",
+        "catalog_sha256",
+        "upstream_catalog_path",
+        "voice_count"
       ],
       "additionalProperties": false,
       "properties": {
         "provider": { "const": "huggingface" },
-        "repository": { "type": "string", "minLength": 1 },
+        "repository": { "type": "string", "pattern": "^[^/\\\\ ]+/[^/\\\\ ]+$" },
         "requested_revision": { "type": "string", "minLength": 1 },
-        "revision": { "type": "string", "minLength": 1 },
-        "catalog_url": { "type": "string", "pattern": "^https://" }
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "catalog_url": { "type": "string", "pattern": "^https://" },
+        "catalog_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "upstream_catalog_path": { "const": "voices.json" },
+        "voice_count": { "type": "integer", "minimum": 1 }
       }
     },
-    "voices": {
+    "language": {
       "type": "object",
-      "minProperties": 1,
-      "additionalProperties": { "$ref": "#/$defs/voice" }
-    }
-  },
-  "$defs": {
+      "required": ["code", "family"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "family": { "type": "string", "minLength": 1 },
+        "region": { "type": "string", "minLength": 1 },
+        "name_native": { "type": "string", "minLength": 1 },
+        "name_english": { "type": "string", "minLength": 1 },
+        "country_english": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
     "artifact": {
       "type": "object",
       "required": ["role", "path", "filename", "url", "size", "md5"],
       "additionalProperties": false,
       "properties": {
         "role": { "enum": ["model_card", "model", "config"] },
-        "path": { "type": "string", "minLength": 1 },
-        "filename": { "type": "string", "minLength": 1 },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(^|/)\\.\\.?(/|$)).+$"
+        },
+        "filename": { "$ref": "#/$defs/safeName" },
         "url": { "type": "string", "pattern": "^https://" },
         "size": { "type": "integer", "minimum": 1 },
         "md5": { "type": "string", "pattern": "^[0-9a-f]{32}$" }
@@ -60,13 +92,20 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
+        "id": { "$ref": "#/$defs/safeName" },
         "name": { "type": "string", "minLength": 1 },
-        "language": { "type": "object" },
+        "language": { "$ref": "#/$defs/language" },
         "quality": { "type": "string", "minLength": 1 },
         "num_speakers": { "type": "integer", "minimum": 1 },
-        "speaker_id_map": { "type": "object" },
-        "aliases": { "type": "array", "items": { "type": "string" } },
+        "speaker_id_map": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "aliases": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/safeName" },
+          "uniqueItems": true
+        },
         "artifacts": {
           "type": "object",
           "required": ["model_card", "model", "config"],

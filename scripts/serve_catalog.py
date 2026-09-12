@@ -7,7 +7,7 @@ import http.server
 import json
 from pathlib import Path
 
-from piper_voice_catalog.catalog import fetch_and_build_catalog, load_catalog
+from piper_voice_catalog.catalog import fetch_and_build_catalog, load_catalog, verify_catalog
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "catalog" / "voices.json"
@@ -26,6 +26,7 @@ def main() -> int:
         catalog = load_catalog(CATALOG)
     else:
         catalog = fetch_and_build_catalog()
+        verify_catalog(catalog)
         CATALOG.write_text(
             json.dumps(catalog, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",

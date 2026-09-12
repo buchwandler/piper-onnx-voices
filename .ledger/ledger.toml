@@ -1,0 +1,18 @@
+schema_version = 3
+
+[project]
+uuid = "1bd1a9c8-a2c1-494a-9bc4-8a4a6a63c11b"
+name = "piper-onnx-voices"
+
+[ledgers.taskledger.mounts.data]
+storage = "external"
+root = "../ledger"
+
+[ledgers.taskledger.mounts.runtime]
+storage = "user-data"
+
+[ledgers.taskledger.mounts.logs]
+storage = "user-data"
+
+[ledgers.taskledger.mounts.indexes]
+storage = "cache"
