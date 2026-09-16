@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,15 +8,41 @@ version = "0.1.0"
 description = "Catalog and downloader for rhasspy/piper-voices"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{name = "piper-onnx-voices contributors"}]
 dependencies = []
+keywords = ["piper", "tts", "onnx", "voices", "speech", "huggingface"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+
+[project.urls]
+Homepage = "https://github.com/buchwandler/piper-onnx-voices"
+Repository = "https://github.com/buchwandler/piper-onnx-voices"
+Issues = "https://github.com/buchwandler/piper-onnx-voices/issues"
+Changelog = "https://github.com/buchwandler/piper-onnx-voices/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-test = ["pytest>=8"]
+test = ["pytest>=8", "jsonschema>=4.23", "ruff"]
+release = ["build", "twine"]
 
 [project.scripts]
 piper-voices = "piper_voice_catalog.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["piper_voice_catalog*"]
+
+[tool.ruff]
+extend-exclude = ["01_todo.md"]

@@ -5,7 +5,6 @@ from pathlib import Path
 
 from scripts.refresh_catalog import _write_json
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 

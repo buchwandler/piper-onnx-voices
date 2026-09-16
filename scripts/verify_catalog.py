@@ -19,7 +19,9 @@ def main() -> int:
         raise CatalogError(f"Unable to load source metadata: {SOURCE}") from exc
     expected_source = {"schema": 1, **catalog["source"]}
     if source != expected_source:
-        raise CatalogError("catalog/source.json does not match catalog/voices.json source metadata")
+        raise CatalogError(
+            "catalog/source.json does not match catalog/voices.json source metadata"
+        )
     print(
         f"Verified {len(catalog['voices'])} Piper voices; "
         f"revision={catalog['source']['revision']}"

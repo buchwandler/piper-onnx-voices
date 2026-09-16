@@ -15,7 +15,9 @@ SOURCE = ROOT / "catalog" / "source.json"
 
 def _write_json(path: Path, data: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent, text=True)
+    fd, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", dir=path.parent, text=True
+    )
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as output:
             json.dump(data, output, ensure_ascii=False, indent=2, sort_keys=True)

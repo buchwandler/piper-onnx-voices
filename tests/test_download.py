@@ -63,10 +63,16 @@ def test_download_voice_writes_exact_three_files(monkeypatch, tmp_path: Path) ->
     }
 
 
-def test_matching_existing_files_are_reused_without_network(monkeypatch, tmp_path: Path) -> None:
+def test_matching_existing_files_are_reused_without_network(
+    monkeypatch, tmp_path: Path
+) -> None:
     target = tmp_path / "voice"
     target.mkdir()
-    for filename, value in [("MODEL_CARD", b"card"), ("v.onnx", b"model"), ("v.onnx.json", b"{}")]:
+    for filename, value in [
+        ("MODEL_CARD", b"card"),
+        ("v.onnx", b"model"),
+        ("v.onnx.json", b"{}"),
+    ]:
         (target / filename).write_bytes(value)
 
     def fail(*args, **kwargs):

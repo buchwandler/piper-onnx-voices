@@ -10,11 +10,29 @@ Each selected voice exposes exactly three required artifacts:
 2. The Piper `.onnx` model.
 3. The matching `.onnx.json` configuration.
 
+## Installation
+
+For users installing the published package:
+
+```bash
+python -m pip install piper-onnx-voices
+```
+
+For development from a checkout:
+
+```bash
+python -m pip install -e '.[test,release]'
+```
+
+## Release status
+
+`0.1.0` is the first public release. The Python package is network-first:
+voice model files are not bundled in the wheel. The repository contains a
+pinned materialized catalog for reproducible and offline catalog use.
+
 ## Quick start
 
 ```bash
-python -m pip install -e .
-
 # Live catalog from upstream main.
 piper-voices list
 piper-voices list --language et --quality medium

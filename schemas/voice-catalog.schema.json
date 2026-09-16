@@ -39,7 +39,10 @@
       "additionalProperties": false,
       "properties": {
         "provider": { "const": "huggingface" },
-        "repository": { "type": "string", "pattern": "^[^/\\\\ ]+/[^/\\\\ ]+$" },
+        "repository": {
+          "type": "string",
+          "pattern": "^[^/\\\\ ]+/[^/\\\\ ]+$"
+        },
         "requested_revision": { "type": "string", "minLength": 1 },
         "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
         "catalog_url": { "type": "string", "pattern": "^https://" },

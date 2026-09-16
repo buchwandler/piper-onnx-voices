@@ -25,7 +25,13 @@ def _md5(path: Path) -> str:
 
 
 def _destination(target: Path, filename: str) -> Path:
-    if not filename or filename in {".", ".."} or "/" in filename or "\\" in filename or Path(filename).is_absolute():
+    if (
+        not filename
+        or filename in {".", ".."}
+        or "/" in filename
+        or "\\" in filename
+        or Path(filename).is_absolute()
+    ):
         raise DownloadError(f"Unsafe artifact filename: {filename!r}")
     target.mkdir(parents=True, exist_ok=True)
     root = target.resolve()
@@ -40,7 +46,9 @@ def _destination(target: Path, filename: str) -> Path:
 
 def _download_artifact(artifact: dict[str, Any], destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    request = urllib.request.Request(artifact["url"], headers={"User-Agent": USER_AGENT})
+    request = urllib.request.Request(
+        artifact["url"], headers={"User-Agent": USER_AGENT}
+    )
     fd, temporary_name = tempfile.mkstemp(
         prefix=f".{destination.name}.", suffix=".part", dir=destination.parent
     )

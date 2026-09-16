@@ -1,0 +1,10 @@
+include LICENSE
+include NOTICE
+include README.md
+include CHANGELOG.md
+
+recursive-include catalog *.json
+recursive-include schemas *.json
+recursive-include scripts *.py
+recursive-include tests *.py *.json
+recursive-include web *.html
