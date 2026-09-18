@@ -10,5 +10,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install jsonschema
-      - run: python scripts/verify_catalog.py
+      - run: python -m pip install onnxvoice
+      - run: onnxvoice catalog piper verify --catalog catalog/voices.json --source catalog/source.json
