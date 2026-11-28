@@ -1,11 +1,11 @@
 {
-  "catalog_sha256": "8e2cc3299e56305c5d13736428b14786cbf83ced2104bc4dd61baed259e01def",
-  "catalog_url": "https://huggingface.co/rhasspy/piper-voices/resolve/5ec43b186ef915a195d3ddbcfd9916e76c503c3f/voices.json?download=true",
+  "catalog_sha256": "0a1f58eff60932df1e911ede1ea3bded87ae552d89df5ffff21832feaac556ca",
+  "catalog_url": "https://huggingface.co/rhasspy/piper-voices/resolve/613b6e5ad36ddca4e70e171957291483dc244d9f/voices.json?download=true",
   "provider": "huggingface",
   "repository": "rhasspy/piper-voices",
   "requested_revision": "main",
-  "revision": "5ec43b186ef915a195d3ddbcfd9916e76c503c3f",
+  "revision": "613b6e5ad36ddca4e70e171957291483dc244d9f",
   "schema": 1,
   "upstream_catalog_path": "voices.json",
-  "voice_count": 183
+  "voice_count": 188
 }
